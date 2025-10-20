@@ -2,8 +2,8 @@ import cv2
 import mediapipe as mp
 import math
 
-WINDOW_WIDTH = 960
-WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 756
+WINDOW_HEIGHT = 491
 
 CELEBRATE = "celebrate"
 CRY = "cry"
@@ -113,8 +113,8 @@ def detect_emote(frame):
                 if (
                     not hands_data[0]["is_fist"]
                     and not hands_data[1]["is_fist"]
-                    and hands_data[0]["y"] < face_center_y + 100
-                    and hands_data[1]["y"] < face_center_y + 100
+                    and hands_data[0]["y"] < face_center_y - 100
+                    and hands_data[1]["y"] < face_center_y - 100
                 ):
                     detected_emotion = CELEBRATE
 
@@ -192,8 +192,8 @@ def check_fingers_near_mouth(hand_landmarks, face_center_x, face_center_y, w, h)
 
 def check_only_index_finger_extended(hand_landmarks, w, h):
     """Check if only the index finger is extended by checking if fingertips are between knuckles and wrist"""
-    fingertips = [4, 8, 12, 16, 20]  # fingertip landmarks
-    knuckles = [3, 6, 10, 14, 18]  # knuckle landmarks
+    fingertips = [8, 12, 16, 20]  # non-thumb fingertip landmarks
+    knuckles = [6, 10, 14, 18]  # non-thumb knuckle landmarks
     wrist = 0  # wrist landmark
 
     extended_fingers = 0
@@ -212,10 +212,9 @@ def check_only_index_finger_extended(hand_landmarks, w, h):
         )
         wrist_to_tip = math.sqrt((tip_x - wrist_x) ** 2 + (tip_y - wrist_y) ** 2)
 
-        # finger is extended if fingertip is farther from wrist than the knuckle
-        if wrist_to_tip > wrist_to_knuckle:
+        if wrist_to_tip > wrist_to_knuckle + 15:
             extended_fingers += 1
-            if i == 1:  # if index finger is extended
+            if i == 0:  # index finger
                 index_finger_extended = True
 
     return extended_fingers == 1 and index_finger_extended
@@ -232,20 +231,21 @@ def check_mouth_open(face_landmarks, h):
 
 
 def check_hands_open_near_jaw(hands_data, face_center_x, face_center_y):
-    """Check if hands are open and positioned near the jaw area"""
-    if not hands_data:
+    """Check if both hands are open and near the jaw area"""
+    if len(hands_data) < 2:
         return False
+
+    hands_near_jaw = 0
+    jaw_area_y = face_center_y + 250
 
     for hand in hands_data:
         if not hand["is_fist"]:
-            jaw_area_y = face_center_y + 300  # estimation of jaw location
             distance_to_jaw = abs(hand["y"] - jaw_area_y)
             distance_to_face_x = abs(hand["x"] - face_center_x)
+            if distance_to_face_x < 250 and distance_to_jaw < 150:
+                hands_near_jaw += 1
 
-            if distance_to_jaw < 200 and distance_to_face_x < 300:
-                return True
-
-    return False
+    return hands_near_jaw >= 2
 
 
 def check_thinking_gesture(hands_data, face_landmarks, w, h):
@@ -287,12 +287,12 @@ def check_thinking_gesture(hands_data, face_landmarks, w, h):
 def load_images():
     images = {}
     image_files = {
-        "celebrate": "celebrate.png",
-        "cry": "cry.png",
-        "hog": "hog.png",
-        "thinking": "thinking.png",
-        "yawning": "yawning.png",
-        "blank": "white.png",
+        "celebrate": "images/celebrate.png",
+        "cry": "images/cry.png",
+        "hog": "images/hog.png",
+        "thinking": "images/thinking.png",
+        "yawning": "images/yawning.png",
+        "blank": "images/blank.png",
     }
     for name, filename in image_files.items():
         img = cv2.imread(filename)
@@ -311,14 +311,13 @@ def main():
         ret, frame = cap.read()
         if not ret:
             break
+
         frame = cv2.flip(frame, 1)
+        frame, emotion = detect_emote(frame)
+        emotion_image = images[emotion]
 
-        frame, detected_emotion = detect_emote(frame)
-
-        if detected_emotion != BLANK:
-            pass
-
-        cv2.imshow("Hand Detector", frame)
+        cv2.imshow("tspmo", frame)
+        cv2.imshow("emote", emotion_image)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
     cap.release()
